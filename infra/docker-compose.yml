@@ -1,0 +1,70 @@
+services:
+  neo4j:
+    image: neo4j:2026.06-community
+    container_name: furnicost-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/furnicost-dev
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1g
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: furnicost-postgres
+    environment:
+      POSTGRES_USER: furnicost
+      POSTGRES_PASSWORD: furnicost
+      POSTGRES_DB: furnicost
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U furnicost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: furnicost-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  langfuse:
+    image: langfuse/langfuse:latest
+    container_name: furnicost-langfuse
+    profiles: ["observability"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://furnicost:furnicost@postgres:5432/langfuse
+      DIRECT_URL: postgresql://furnicost:furnicost@postgres:5432/langfuse
+      REDIS_HOST: redis
+      NEXTAUTH_URL: http://localhost:3010
+      NEXTAUTH_SECRET: furnicost-dev-secret-change-me
+      SALT: furnicost-dev-salt-change-me
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+    ports:
+      - "3010:3000"
+
+volumes:
+  neo4j-data:
+  postgres-data:
